@@ -30,7 +30,7 @@ int main(int argc, char **argv)
     ros::NodeHandle private_nh("~");
 
     std::string color_topic, depth_topic, infrared_topic, pointcloud_topic;
-    bool enable_color, enable_depth, enable_infrared, enable_pointcloud;
+    bool enable_color, enable_depth, enable_infrared, enable_pointcloud, align_to_color;
     std::string camera_serials;
     int camera_number;
     private_nh.param<std::string>("color_topic", color_topic, "/color/image_raw");
@@ -43,6 +43,7 @@ int main(int argc, char **argv)
     private_nh.param<bool>("enable_pointcloud", enable_pointcloud, false);
     private_nh.param<std::string>("camera_serials", camera_serials, "");
     private_nh.param<int>("camera_number", camera_number, 0);
+    private_nh.param<bool>("align_to_color", align_to_color, true);
 
     color_topic = "/camera" + std::to_string(camera_number) + color_topic;
     depth_topic = "/camera" + std::to_string(camera_number) + depth_topic;
@@ -76,11 +77,30 @@ int main(int argc, char **argv)
     {
         camera_serials = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
     }
-    cam.set_Camera(camera_number, camera_serials, enable_color, enable_depth, enable_infrared, enable_pointcloud, Align_To_Color, nh);
-    cam.set_color_pub(color_topic);
-    cam.set_depth_pub(depth_topic);
-    cam.set_infrared_pub(infrared_topic);
-    cam.set_pointcloud_pub(pointcloud_topic);
+    if (align_to_color)
+    {
+        cam.set_Camera(camera_number, camera_serials, enable_color, enable_depth, enable_infrared, enable_pointcloud, Align_To_Color, nh);
+    }
+    else
+    {
+        cam.set_Camera(camera_number, camera_serials, enable_color, enable_depth, enable_infrared, enable_pointcloud, Align_To_Infrared, nh);
+    }
+    if (enable_color)
+    {
+        cam.set_color_pub(color_topic);
+    }
+    if (enable_depth)
+    {
+        cam.set_depth_pub(depth_topic);
+    }
+    if (enable_infrared)
+    {
+        cam.set_infrared_pub(infrared_topic);
+    }
+    if (enable_pointcloud)
+    {
+        cam.set_pointcloud_pub(pointcloud_topic);
+    }
     cam.rs_imshow();
 
     return 0;

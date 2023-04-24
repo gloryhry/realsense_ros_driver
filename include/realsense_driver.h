@@ -252,7 +252,7 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, cv::Mat color_raw)
     {
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-
+        auto type = color_raw.type();
         auto sp = points.get_profile().as<rs2::video_stream_profile>();
         cloud->width = sp.width();
         cloud->height = sp.height();
@@ -260,18 +260,60 @@ public:
         cloud->points.resize(points.size());
         auto ptr = points.get_vertices();
         auto tex = points.get_texture_coordinates();
-        cv::Vec3b vc3;
+        if(type == CV_8UC3){
+            cv::Vec3b vc3;
+            for (auto &p : cloud->points)
+            {
+                p.x = ptr->x;
+                p.y = ptr->y;
+                p.z = ptr->z;
+                vc3 = color_raw.at<cv::Vec3b>((tex->v) * (color_raw.rows), (tex->u) * (color_raw.cols));
+                p.r = vc3.val[0];
+                p.g = vc3.val[1];
+                p.b = vc3.val[2];
+                ptr++;
+                tex++;
+            }
+        }
+        else if(type == CV_8UC1){
+            uchar vc3;
+            for (auto &p : cloud->points)
+            {
+                p.x = ptr->x;
+                p.y = ptr->y;
+                p.z = ptr->z;
+                vc3 = color_raw.at<uchar>((tex->v) * (color_raw.rows), (tex->u) * (color_raw.cols));
+                p.r = vc3;
+                p.g = vc3;
+                p.b = vc3;
+                ptr++;
+                tex++;
+            }
+        }
+        
+
+        return cloud;
+    }
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points)
+    {
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+        auto sp = points.get_profile().as<rs2::video_stream_profile>();
+        cloud->width = sp.width();
+        cloud->height = sp.height();
+        cloud->is_dense = false;
+        cloud->points.resize(points.size());
+        auto ptr = points.get_vertices();
         for (auto &p : cloud->points)
         {
             p.x = ptr->x;
             p.y = ptr->y;
             p.z = ptr->z;
-            vc3 = color_raw.at<cv::Vec3b>((tex->v) * (color_raw.rows), (tex->u) * (color_raw.cols));
-            p.r = vc3.val[0];
-            p.g = vc3.val[1];
-            p.b = vc3.val[2];
+            p.r = 255;
+            p.g = 255;
+            p.b = 255;
             ptr++;
-            tex++;
         }
 
         return cloud;
@@ -314,8 +356,15 @@ public:
                 {
                     // Generate the pointcloud and texture mappings
                     points = pc.calculate(aligned_depth_frame);
-                    // Tell pointcloud object to map to this color frame
-                    pc.map_to(aligned_color_frame);
+                    if (align_to == Align_To_Color)
+                    {
+                        // Tell pointcloud object to map to this color frame
+                        pc.map_to(aligned_color_frame);
+                    }
+                    else if (align_to == Align_To_Infrared)
+                    {
+                        pc.map_to(aligned_infrared_frame);
+                    }
                 }
 
                 // Query frame size (width and height)
@@ -362,7 +411,14 @@ public:
                 }
                 if (depth && pointcloud && pointcloud_init)
                 {
-                    cloud = points_to_pcl(points, color_raw);
+                    if (align_to == Align_To_Color)
+                    {
+                        cloud = points_to_pcl(points, color_raw);
+                    }
+                    else if (align_to == Align_To_Infrared)
+                    {
+                        cloud = points_to_pcl(points, infrared_raw);
+                    }
                     header.frame_id = "camera" + std::to_string(camera_number) + "_depth_frame";
                     sensor_msgs::PointCloud2 camera_pointcloud;
                     pcl::toROSMsg(*cloud, camera_pointcloud);
