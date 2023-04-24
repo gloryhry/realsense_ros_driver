@@ -2,8 +2,10 @@ cmake_minimum_required(VERSION 3.0.2)
 project(realsense_driver)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+# add_compile_options(-std=c++14)
+set(CMAKE_CXX_FLAGS "-std=c++11 -O3")
 set(CMAKE_BUILD_TYPE Release)
+# set(CMAKE_BUILD_TYPE Debug)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -13,11 +15,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   std_msgs
+  pcl_ros
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenCV REQUIRED)
+find_package(PCL REQUIRED)
 # find_package(OpenGL REQUIRED)
 # set(DEPENDENCIES realsense2 glfw ${OPENGL_LIBRARIES})
 # set(DEPENDENCIES realsense2)
@@ -159,7 +163,7 @@ add_executable(realsense_driver src/realsense_driver_node.cpp)
 set_property(TARGET realsense_driver PROPERTY CXX_STANDARD 11)
 add_dependencies(realsense_driver ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(realsense_driver ${catkin_LIBRARIES}
-realsense2 ${OpenCV_LIBRARIES})
+realsense2 ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
