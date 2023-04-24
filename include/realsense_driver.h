@@ -41,8 +41,12 @@
 #include <opencv2/opencv.hpp>
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <cv_bridge/cv_bridge.h>
-#include <thread>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 #define Align_To_Color 0
 #define Align_To_Infrared 1
@@ -51,7 +55,7 @@ class Camera
 {
 public:
     Camera() {}
-    Camera(int number_, std::string serial_, bool color_, bool depth_, bool infrared_, int align_, ros::NodeHandle nh_)
+    Camera(int number_, std::string serial_, bool color_, bool depth_, bool infrared_, bool pointcloud_, int align_, ros::NodeHandle nh_)
     {
         nh = nh_;
         camera_number = number_;
@@ -59,6 +63,7 @@ public:
         color = color_;
         depth = depth_;
         infrared = infrared_;
+        pointcloud = pointcloud_;
         align_to = align_;
         pipe_config.enable_device(camera_serial_number);
         if (color)
@@ -107,7 +112,7 @@ public:
         // 将深度图对齐到RGB图
         align = rs2::align(aligned);
     }
-    void set_Camera(int number_, std::string serial_, bool color_, bool depth_, bool infrared_, int align_,ros::NodeHandle nh_)
+    void set_Camera(int number_, std::string serial_, bool color_, bool depth_, bool infrared_, bool pointcloud_, int align_, ros::NodeHandle nh_)
     {
         nh = nh_;
         camera_number = number_;
@@ -115,6 +120,7 @@ public:
         color = color_;
         depth = depth_;
         infrared = infrared_;
+        pointcloud = pointcloud_;
         align_to = align_;
         pipe_config.enable_device(camera_serial_number);
         if (depth)
@@ -177,12 +183,17 @@ public:
         infrared_pub = nh.advertise<sensor_msgs::Image>(infrared_topic, 1);
         infrared_init = true;
     }
+    void set_pointcloud_pub(std::string pointcloud_topic)
+    {
+        pointcloud_pub = nh.advertise<sensor_msgs::PointCloud2>(pointcloud_topic, 1);
+        pointcloud_init = true;
+    }
     ~Camera() {}
 
 public:
     ros::NodeHandle nh;
     int align_to = 0;
-    bool color = true, depth = false, infrared = false;
+    bool color = true, depth = false, infrared = false, pointcloud = false;
     int camera_number;
     std::string camera_serial_number;
     // Declare depth colorizer for pretty visualization of depth data
@@ -201,7 +212,14 @@ public:
     ros::Publisher color_pub;
     ros::Publisher depth_pub;
     ros::Publisher infrared_pub;
-    bool color_init = false,depth_init=false,infrared_init=false;
+    ros::Publisher pointcloud_pub;
+    bool color_init = false, depth_init = false, infrared_init = false, pointcloud_init;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud;
+
+    // Declare pointcloud object, for calculating pointclouds and texture mappings
+    rs2::pointcloud pc;
+    // We want the points object to be persistent so we can display the last cloud when a frame drops
+    rs2::points points;
 
 public:
     float get_depth_scale(rs2::device dev)
@@ -229,6 +247,33 @@ public:
             }
         }
         return false;
+    }
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, cv::Mat color_raw)
+    {
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+        auto sp = points.get_profile().as<rs2::video_stream_profile>();
+        cloud->width = sp.width();
+        cloud->height = sp.height();
+        cloud->is_dense = false;
+        cloud->points.resize(points.size());
+        auto ptr = points.get_vertices();
+        auto tex = points.get_texture_coordinates();
+        for (auto &p : cloud->points)
+        {
+            p.x = ptr->x;
+            p.y = ptr->y;
+            p.z = ptr->z;
+            cv::Vec3b vc3 = color_raw.at<cv::Vec3b>((tex->v)*(color_raw.rows),(tex->u)*(color_raw.cols));
+            p.r = vc3.val[0];
+            p.g = vc3.val[1];
+            p.b = vc3.val[2];
+            ptr++;
+            tex++;
+        }
+        
+        return cloud;
     }
 
     int rs_imshow()
@@ -264,8 +309,13 @@ public:
                 {
                     aligned_infrared_frame = processed.get_infrared_frame(); // 红外图
                 }
-                // 获取对齐之前的color图像
-                // rs2::frame before_depth_frame = data.get_depth_frame().apply_filter(color_map); // 获取对齐之前的深度图
+                if (depth && pointcloud)
+                {
+                    // Generate the pointcloud and texture mappings
+                    points = pc.calculate(aligned_depth_frame);
+                    // Tell pointcloud object to map to this color frame
+                    pc.map_to(aligned_color_frame);
+                }
 
                 // Query frame size (width and height)
                 int color_w, color_h, depth_w, depth_h, infrared_w, infrared_h;
@@ -288,17 +338,6 @@ public:
                     infrared_raw = cv::Mat(cv::Size(infrared_w, infrared_h), CV_8UC1, (void *)aligned_infrared_frame.get_data());
                 }
 
-                // // PointCloud
-                // // 创建一个深度帧和一个内参结构体
-                // rs2::depth_frame depth_frame = processed.get_depth_frame();
-                // rs2::video_stream_profile depth_profile = depth_frame.get_profile().as<rs2::video_stream_profile>();
-                // rs2_intrinsics intrin = depth_profile.get_intrinsics();
-                // // 获取深度值和像素坐标
-                // float depth_value = depth_frame.get_distance(x, y);
-                // float pixel[2] = {(float)x, (float)y};
-                // float point[3];
-                // rs2_deproject_pixel_to_point(point, &intrin, pixel, depth_value);
-
                 std_msgs::Header header;
                 header.stamp = now_time;
 
@@ -320,13 +359,16 @@ public:
                     sensor_msgs::ImagePtr infrared_msg = cv_bridge::CvImage(header, "mono8", infrared_raw).toImageMsg();
                     infrared_pub.publish(*infrared_msg);
                 }
+                if(depth && pointcloud && pointcloud_init)
+                {
+                    cloud = points_to_pcl(points,color_raw);
+                    header.frame_id = "camera_pointcloud";
+                    sensor_msgs::PointCloud2 camera_pointcloud;
+                    pcl::toROSMsg(*cloud,camera_pointcloud);
+                    camera_pointcloud.header = header;
+                    pointcloud_pub.publish(camera_pointcloud);
+                }
 
-                // sensor_msgs::ImagePtr color_msg = cv_bridge::CvImage(header, "rgb8", color_raw).toImageMsg();
-                // sensor_msgs::ImagePtr depth_msg = cv_bridge::CvImage(header, "mono16", depth_raw).toImageMsg();
-                // sensor_msgs::ImagePtr infrared_msg = cv_bridge::CvImage(header, "mono8", infrared_raw).toImageMsg();
-                // color_pub.publish(*color_msg);
-                // depth_pub.publish(*depth_msg);
-                // infrared_pub.publish(*infrared_msg);
             }
             return EXIT_SUCCESS;
         }

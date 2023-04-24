@@ -29,29 +29,32 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle private_nh("~");
 
-    std::string color_topic, depth_topic, infrared_topic;
-    bool enable_color, enable_depth, enable_infrared;
+    std::string color_topic, depth_topic, infrared_topic, pointcloud_topic;
+    bool enable_color, enable_depth, enable_infrared, enable_pointcloud;
     std::string camera_serials;
     int camera_number;
     private_nh.param<std::string>("color_topic", color_topic, "/color/image_raw");
     private_nh.param<std::string>("depth_topic", depth_topic, "/depth/image_raw");
     private_nh.param<std::string>("infrared_topic", infrared_topic, "/infrared/image_raw");
+    private_nh.param<std::string>("pointcloud_topic", pointcloud_topic, "/pointcloud");
     private_nh.param<bool>("enable_color", enable_color, true);
     private_nh.param<bool>("enable_depth", enable_depth, false);
     private_nh.param<bool>("enable_infrared", enable_infrared, false);
+    private_nh.param<bool>("enable_pointcloud", enable_pointcloud, false);
     private_nh.param<std::string>("camera_serials", camera_serials, "");
     private_nh.param<int>("camera_number", camera_number, 0);
 
     color_topic = "/camera" + std::to_string(camera_number) + color_topic;
     depth_topic = "/camera" + std::to_string(camera_number) + depth_topic;
     infrared_topic = "/camera" + std::to_string(camera_number) + infrared_topic;
+    pointcloud_topic = "/camera" + std::to_string(camera_number) + pointcloud_topic;
 
-    ros::Publisher color_pub;
-    ros::Publisher depth_pub;
-    ros::Publisher infrared_pub;
-    color_pub = nh.advertise<sensor_msgs::Image>(color_topic, 1);
-    depth_pub = nh.advertise<sensor_msgs::Image>(depth_topic, 1);
-    infrared_pub = nh.advertise<sensor_msgs::Image>(infrared_topic, 1);
+    // ros::Publisher color_pub;
+    // ros::Publisher depth_pub;
+    // ros::Publisher infrared_pub;
+    // color_pub = nh.advertise<sensor_msgs::Image>(color_topic, 1);
+    // depth_pub = nh.advertise<sensor_msgs::Image>(depth_topic, 1);
+    // infrared_pub = nh.advertise<sensor_msgs::Image>(infrared_topic, 1);
 
     rs2::log_to_console(RS2_LOG_SEVERITY_WARN);
     rs2::context ctx;
@@ -73,10 +76,11 @@ int main(int argc, char **argv)
     {
         camera_serials = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
     }
-    cam.set_Camera(camera_number, camera_serials, enable_color, enable_depth, enable_infrared, Align_To_Color, nh);
+    cam.set_Camera(camera_number, camera_serials, enable_color, enable_depth, enable_infrared, enable_pointcloud, Align_To_Color, nh);
     cam.set_color_pub(color_topic);
     cam.set_depth_pub(depth_topic);
     cam.set_infrared_pub(infrared_topic);
+    cam.set_pointcloud_pub(pointcloud_topic);
     cam.rs_imshow();
 
     return 0;
