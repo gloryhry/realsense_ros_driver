@@ -2,10 +2,14 @@ cmake_minimum_required(VERSION 3.0.2)
 project(realsense_driver)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++14)
-set(CMAKE_CXX_FLAGS "-std=c++11 -O3")
-set(CMAKE_BUILD_TYPE Release)
-# set(CMAKE_BUILD_TYPE Debug)
+add_compile_options(-std=c++14)
+ # Set C++ flags for optimization and threading
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -pthread")
+ # Set C++ flags for OpenMP
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+ # Set build type to Release
+# set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -22,9 +26,6 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
-# find_package(OpenGL REQUIRED)
-# set(DEPENDENCIES realsense2 glfw ${OPENGL_LIBRARIES})
-# set(DEPENDENCIES realsense2)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -160,7 +161,6 @@ include_directories(
 # )
 
 add_executable(realsense_driver src/realsense_driver_node.cpp)
-set_property(TARGET realsense_driver PROPERTY CXX_STANDARD 11)
 add_dependencies(realsense_driver ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(realsense_driver ${catkin_LIBRARIES}
 realsense2 ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
@@ -169,8 +169,30 @@ realsense2 ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 ## Install ##
 #############
 
+message(NOTICE "INSTALL DESTINATION " ${CATKIN_GLOBAL_BIN_DESTINATION})
+
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
+
+install(TARGETS realsense_driver
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+
+install(TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
+
+install(DIRECTORY include 
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.h"
+  PATTERN ".svn" EXCLUDE
+)
+
+install(DIRECTORY launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
@@ -192,6 +214,7 @@ realsense2 ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 # )
+
 
 ## Mark cpp header files for installation
 # install(DIRECTORY include/${PROJECT_NAME}/

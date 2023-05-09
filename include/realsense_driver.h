@@ -80,23 +80,23 @@ public:
         }
 
         profile = pipe.start(pipe_config);
-        if (depth)
-        {
-            auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
-            const auto depth_intrinsics = depth_stream.get_intrinsics();
-            float depth_scale = get_depth_scale(profile.get_device());
-            std::cout << "Camera" << camera_number << " depth_scale = " << depth_scale << std::endl;
-        }
-        if (color)
-        {
-            auto color_stream = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
-            auto color_intrinsics = color_stream.get_intrinsics();
-        }
-        if (infrared)
-        {
-            auto infrared_stream = profile.get_stream(RS2_STREAM_INFRARED).as<rs2::video_stream_profile>();
-            auto infrared_intrinsics = infrared_stream.get_intrinsics();
-        }
+        // if (depth)
+        // {
+        //     // auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
+        //     // const auto depth_intrinsics = depth_stream.get_intrinsics();
+        //     float depth_scale = get_depth_scale(profile.get_device());
+        //     std::cout << "Camera" << camera_number << " depth_scale = " << depth_scale << std::endl;
+        // }
+        // if (color)
+        // {
+        //     auto color_stream = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+        //     auto color_intrinsics = color_stream.get_intrinsics();
+        // }
+        // if (infrared)
+        // {
+        //     auto infrared_stream = profile.get_stream(RS2_STREAM_INFRARED).as<rs2::video_stream_profile>();
+        //     auto infrared_intrinsics = infrared_stream.get_intrinsics();
+        // }
 
         // 选择彩色图像数据流来作为对齐对象
 
@@ -137,23 +137,23 @@ public:
         }
 
         profile = pipe.start(pipe_config);
-        if (depth)
-        {
-            auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
-            const auto depth_intrinsics = depth_stream.get_intrinsics();
-            float depth_scale = get_depth_scale(profile.get_device());
-            std::cout << "Camera" << camera_number << " depth_scale = " << depth_scale << std::endl;
-        }
-        if (color)
-        {
-            auto color_stream = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
-            auto color_intrinsics = color_stream.get_intrinsics();
-        }
-        if (infrared)
-        {
-            auto infrared_stream = profile.get_stream(RS2_STREAM_INFRARED).as<rs2::video_stream_profile>();
-            auto infrared_intrinsics = infrared_stream.get_intrinsics();
-        }
+        // if (depth)
+        // {
+        //     // auto depth_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
+        //     // const auto depth_intrinsics = depth_stream.get_intrinsics();
+        //     float depth_scale = get_depth_scale(profile.get_device());
+        //     std::cout << "Camera" << camera_number << " depth_scale = " << depth_scale << std::endl;
+        // }
+        // if (color)
+        // {
+        //     auto color_stream = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+        //     auto color_intrinsics = color_stream.get_intrinsics();
+        // }
+        // if (infrared)
+        // {
+        //     auto infrared_stream = profile.get_stream(RS2_STREAM_INFRARED).as<rs2::video_stream_profile>();
+        //     auto infrared_intrinsics = infrared_stream.get_intrinsics();
+        // }
 
         // 选择彩色图像数据流来作为对齐对象
         // 对齐的是彩色图，所以彩色图是不变的
@@ -252,7 +252,7 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points, cv::Mat color_raw)
     {
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-
+        auto type = color_raw.type();
         auto sp = points.get_profile().as<rs2::video_stream_profile>();
         cloud->width = sp.width();
         cloud->height = sp.height();
@@ -260,19 +260,62 @@ public:
         cloud->points.resize(points.size());
         auto ptr = points.get_vertices();
         auto tex = points.get_texture_coordinates();
+        if(type == CV_8UC3){
+            cv::Vec3b vc3;
+            for (auto &p : cloud->points)
+            {
+                p.x = ptr->x;
+                p.y = ptr->y;
+                p.z = ptr->z;
+                vc3 = color_raw.at<cv::Vec3b>((tex->v) * (color_raw.rows), (tex->u) * (color_raw.cols));
+                p.r = vc3.val[0];
+                p.g = vc3.val[1];
+                p.b = vc3.val[2];
+                ptr++;
+                tex++;
+            }
+        }
+        else if(type == CV_8UC1){
+            uchar vc3;
+            for (auto &p : cloud->points)
+            {
+                p.x = ptr->x;
+                p.y = ptr->y;
+                p.z = ptr->z;
+                vc3 = color_raw.at<uchar>((tex->v) * (color_raw.rows), (tex->u) * (color_raw.cols));
+                p.r = vc3;
+                p.g = vc3;
+                p.b = vc3;
+                ptr++;
+                tex++;
+            }
+        }
+        
+
+        return cloud;
+    }
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_to_pcl(const rs2::points &points)
+    {
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+
+        auto sp = points.get_profile().as<rs2::video_stream_profile>();
+        cloud->width = sp.width();
+        cloud->height = sp.height();
+        cloud->is_dense = false;
+        cloud->points.resize(points.size());
+        auto ptr = points.get_vertices();
         for (auto &p : cloud->points)
         {
             p.x = ptr->x;
             p.y = ptr->y;
             p.z = ptr->z;
-            cv::Vec3b vc3 = color_raw.at<cv::Vec3b>((tex->v)*(color_raw.rows),(tex->u)*(color_raw.cols));
-            p.r = vc3.val[0];
-            p.g = vc3.val[1];
-            p.b = vc3.val[2];
+            p.r = 255;
+            p.g = 255;
+            p.b = 255;
             ptr++;
-            tex++;
         }
-        
+
         return cloud;
     }
 
@@ -290,7 +333,7 @@ public:
                     // 如果profile发生改变，则更新align对象，重新获取深度图像像素到长度单位的转换比例
                     profile = pipe.get_active_profile();
                     align = rs2::align(aligned);
-                    float depth_scale = get_depth_scale(profile.get_device());
+                    // float depth_scale = get_depth_scale(profile.get_device());
                 }
                 // 获取对齐后的帧
                 auto processed = align.process(data);
@@ -313,8 +356,15 @@ public:
                 {
                     // Generate the pointcloud and texture mappings
                     points = pc.calculate(aligned_depth_frame);
-                    // Tell pointcloud object to map to this color frame
-                    pc.map_to(aligned_color_frame);
+                    if (align_to == Align_To_Color)
+                    {
+                        // Tell pointcloud object to map to this color frame
+                        pc.map_to(aligned_color_frame);
+                    }
+                    else if (align_to == Align_To_Infrared)
+                    {
+                        pc.map_to(aligned_infrared_frame);
+                    }
                 }
 
                 // Query frame size (width and height)
@@ -343,32 +393,38 @@ public:
 
                 if (color && color_init)
                 {
-                    header.frame_id = "camera_color";
+                    header.frame_id = "camera" + std::to_string(camera_number) + "_color_optical_frame";
                     sensor_msgs::ImagePtr color_msg = cv_bridge::CvImage(header, "rgb8", color_raw).toImageMsg();
                     color_pub.publish(*color_msg);
                 }
                 if (depth && depth_init)
                 {
-                    header.frame_id = "camera_depth";
+                    header.frame_id = "camera" + std::to_string(camera_number) + "_depth_optical_frame";
                     sensor_msgs::ImagePtr depth_msg = cv_bridge::CvImage(header, "mono16", depth_raw).toImageMsg();
                     depth_pub.publish(*depth_msg);
                 }
                 if (infrared && infrared_init)
                 {
-                    header.frame_id = "camera_infrared";
+                    header.frame_id = "camera" + std::to_string(camera_number) + "_infrared_optical_frame";
                     sensor_msgs::ImagePtr infrared_msg = cv_bridge::CvImage(header, "mono8", infrared_raw).toImageMsg();
                     infrared_pub.publish(*infrared_msg);
                 }
-                if(depth && pointcloud && pointcloud_init)
+                if (depth && pointcloud && pointcloud_init)
                 {
-                    cloud = points_to_pcl(points,color_raw);
-                    header.frame_id = "camera_pointcloud";
+                    if (align_to == Align_To_Color)
+                    {
+                        cloud = points_to_pcl(points, color_raw);
+                    }
+                    else if (align_to == Align_To_Infrared)
+                    {
+                        cloud = points_to_pcl(points, infrared_raw);
+                    }
+                    header.frame_id = "camera" + std::to_string(camera_number) + "_depth_frame";
                     sensor_msgs::PointCloud2 camera_pointcloud;
-                    pcl::toROSMsg(*cloud,camera_pointcloud);
+                    pcl::toROSMsg(*cloud, camera_pointcloud);
                     camera_pointcloud.header = header;
                     pointcloud_pub.publish(camera_pointcloud);
                 }
-
             }
             return EXIT_SUCCESS;
         }
